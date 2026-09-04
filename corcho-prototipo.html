@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — prototipo</title>
+<style>
+  :root{
+    --cork:#2b2620;
+    --cork-line:#3a332a;
+    --paper:#f2ead8;
+    --paper-edge:#e0d4b8;
+    --ink:#2b2620;
+    --pin-1:#b5533c;
+    --pin-2:#4f7a68;
+    --pin-3:#c9a227;
+    --pin-4:#5b6b8c;
+    --thread:#c9a227;
+    --accent:#e0d4b8;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--cork);
+    font-family:'Iowan Old Style','Georgia',serif;color:var(--paper);}
+  #topbar{
+    position:fixed;top:0;left:0;right:0;height:56px;z-index:50;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:linear-gradient(180deg,#241f19,#2b2620);
+    border-bottom:1px solid var(--cork-line);
+  }
+  #topbar .brand{display:flex;align-items:center;gap:10px;}
+  #topbar .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--pin-1);}
+  #topbar h1{font-size:15px;font-weight:600;letter-spacing:.02em;margin:0;font-family:system-ui,sans-serif;color:var(--paper);}
+  #topbar .board-name{font-size:12px;color:#a89c85;font-family:system-ui,sans-serif;}
+  .actions{display:flex;gap:8px;align-items:center;}
+  button{
+    font-family:system-ui,sans-serif;font-size:12.5px;font-weight:500;
+    background:transparent;color:var(--paper);border:1px solid #4a4136;
+    padding:7px 12px;border-radius:6px;cursor:pointer;transition:background .15s;
+  }
+  button:hover{background:#3a332a;}
+  button.primary{background:var(--pin-3);color:#1e1a14;border-color:var(--pin-3);font-weight:600;}
+  button.primary:hover{background:#d9b53a;}
+  #status{font-size:11.5px;color:#8f8570;font-family:system-ui,sans-serif;margin-right:6px;}
+
+  #canvas-wrap{position:absolute;top:56px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;}
+  #canvas-wrap.grabbing{cursor:grabbing;}
+  #canvas{
+    position:absolute;top:0;left:0;
+    width:6000px;height:4000px;
+    background-image:
+      radial-gradient(circle,#3a332a 1px,transparent 1.4px);
+    background-size:26px 26px;
+    background-position:0 0;
+    background-color:var(--cork);
+    transform-origin:0 0;
+  }
+  svg#threads{position:absolute;top:0;left:0;width:6000px;height:4000px;pointer-events:none;}
+
+  .card{
+    position:absolute;width:220px;min-height:150px;
+    background:var(--paper);
+    border-radius:2px;
+    box-shadow:0 8px 18px rgba(0,0,0,.35),0 1px 0 var(--paper-edge) inset;
+    padding:22px 16px 16px;
+    cursor:grab;
+    user-select:none;
+    transform:rotate(var(--rot,0deg));
+  }
+  .card:active{cursor:grabbing;}
+  .card.selected{outline:2px solid var(--pin-3);outline-offset:3px;}
+  .pin{
+    position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+    width:16px;height:16px;border-radius:50%;
+    box-shadow:0 3px 4px rgba(0,0,0,.4);
+    border:2px solid rgba(0,0,0,.15);
+  }
+  .card textarea{
+    width:100%;height:100px;border:none;background:transparent;resize:none;
+    font-family:'Segoe Print','Comic Sans MS',system-ui,sans-serif;
+    font-size:14px;color:var(--ink);line-height:1.4;outline:none;
+  }
+  .card .meta{font-size:10px;color:#8a7f68;font-family:system-ui,sans-serif;margin-top:6px;}
+  .card .close{
+    position:absolute;top:4px;right:6px;font-size:14px;color:#b0a184;
+    cursor:pointer;font-family:system-ui,sans-serif;
+  }
+  .card.image .thumb{
+    width:100%;height:120px;background:#ddd3ba;border-radius:2px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;color:#8a7f68;font-family:system-ui,sans-serif;overflow:hidden;
+  }
+  .card.image .thumb img{width:100%;height:100%;object-fit:cover;}
+  .card .filename{font-size:11px;font-family:system-ui,sans-serif;color:#5c5340;margin-top:8px;word-break:break-all;}
+
+  .connect-hint{
+    position:absolute;bottom:0;left:0;transform:translateX(-100%);
+    width:8px;height:8px;
+  }
+
+  #dock{
+    position:fixed;left:18px;bottom:18px;z-index:40;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  #dock button{width:42px;height:42px;border-radius:8px;font-size:18px;padding:0;}
+
+  #drive-panel{
+    position:fixed;top:66px;right:18px;width:300px;z-index:60;
+    background:#241f19;border:1px solid #4a4136;border-radius:10px;
+    padding:16px;font-family:system-ui,sans-serif;
+    box-shadow:0 12px 30px rgba(0,0,0,.5);
+    display:none;
+  }
+  #drive-panel.open{display:block;}
+  #drive-panel h3{margin:0 0 10px;font-size:13.5px;color:var(--paper);}
+  #drive-panel p{font-size:11.5px;color:#a89c85;line-height:1.5;margin:0 0 12px;}
+  #drive-panel input{
+    width:100%;padding:7px 8px;margin-bottom:8px;font-size:12px;
+    background:#1a160f;border:1px solid #4a4136;border-radius:5px;color:var(--paper);
+  }
+  #drive-panel .row{display:flex;gap:8px;}
+  #drive-panel .row button{flex:1;}
+  .badge{
+    display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;
+    background:#3a332a;color:#c9a227;margin-bottom:8px;
+  }
+  #board-list{margin:10px 0;max-height:140px;overflow-y:auto;}
+  #board-list .item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:6px 8px;font-size:12px;border-radius:5px;cursor:pointer;
+    color:#d8cdb4;
+  }
+  #board-list .item:hover{background:#3a332a;}
+  #board-list .empty{font-size:11px;color:#7a715e;padding:6px 8px;}
+  .divider{height:1px;background:#3a332a;margin:12px 0;}
+  #imgFileInput{display:none;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>Corcho</h1>
+    <span class="board-name" id="boardNameLabel">— proyecto-x (sin guardar)</span>
+  </div>
+  <div class="actions">
+    <span id="status">listo</span>
+    <button onclick="addCard('note')">+ Nota</button>
+    <button onclick="addCard('image')">+ Imagen</button>
+    <button onclick="toggleDrivePanel()">☁ Google Drive</button>
+    <button class="primary" onclick="saveLocalJson()">Exportar .json</button>
+  </div>
+</div>
+
+<div id="drive-panel">
+  <span class="badge">SIN SERVIDOR · TODO EN EL NAVEGADOR</span>
+  <h3>Conectar con Google Drive</h3>
+  <p>
+    Pega tu propio <strong>Client ID de OAuth</strong> (Google Cloud Console →
+    APIs &amp; Services → Credentials → tipo "Web application", con este origen
+    autorizado). El tablero se guarda como <code>corcho-[nombre].json</code>
+    dentro de una carpeta de tu Drive. Nada pasa por un servidor intermedio.
+  </p>
+  <input id="clientIdInput" placeholder="123456-abc.apps.googleusercontent.com">
+  <div class="row">
+    <button class="primary" onclick="driveSignIn()">Conectar</button>
+    <button onclick="driveSaveToDrive()">Guardar en Drive</button>
+  </div>
+
+  <div class="divider"></div>
+  <h3 style="font-size:12.5px;">Tableros en tu Drive</h3>
+  <div class="row" style="margin-bottom:8px;">
+    <button onclick="driveListBoards()">🔄 Listar tableros</button>
+  </div>
+  <div id="board-list"><div class="empty">Conéctate y pulsa "Listar tableros"</div></div>
+
+  <div class="divider"></div>
+  <p style="margin-top:10px;font-size:10.5px;color:#7a715e;">
+    Esta demo simula el flujo si no hay Client ID configurado, para que puedas
+    probar la mecánica de arrastrar / conectar / exportar sin salir de aquí.
+  </p>
+</div>
+<input type="file" id="imgFileInput" accept="image/*">
+<div id="dropHintNodeId" style="display:none;"></div>
+
+<div id="canvas-wrap">
+  <div id="canvas">
+    <svg id="threads"></svg>
+  </div>
+</div>
+
+<div id="dock">
+  <button title="Alejar" onclick="zoomBy(-0.1)">−</button>
+  <button title="Restablecer" onclick="resetView()">⤾</button>
+  <button title="Acercar" onclick="zoomBy(0.1)">+</button>
+</div>
+
+<script>
+/* ---------- Estado del tablero (esto es lo que se guarda como JSON) ---------- */
+let board = {
+  boardId: "proyecto-x",
+  nodes: [
+    {id:"n1", type:"note", x:180, y:140, rot:-2, pin:"pin-1", text:"Idea inicial: rediseño de marca para Mercedes-Benz", w:220},
+    {id:"n2", type:"note", x:470, y:260, rot:1.5, pin:"pin-3", text:"Referencias: estética premium alemana, minimalismo funcional", w:220},
+    {id:"n3", type:"image", x:300, y:440, rot:-1, pin:"pin-2", filename:"moodboard-01.jpg", driveFileId:null, w:220}
+  ],
+  connections: [
+    {from:"n1", to:"n2"},
+    {from:"n2", to:"n3"}
+  ]
+};
+let idCounter = 4;
+let selectedForConnect = null;
+
+/* ---------- Render ---------- */
+const canvas = document.getElementById('canvas');
+const threadsSvg = document.getElementById('threads');
+const pinColors = {"pin-1":"var(--pin-1)","pin-2":"var(--pin-2)","pin-3":"var(--pin-3)","pin-4":"var(--pin-4)"};
+
+function render(){
+  canvas.querySelectorAll('.card').forEach(el=>el.remove());
+  board.nodes.forEach(node=>{
+    const el = document.createElement('div');
+    el.className = 'card' + (node.type==='image' ? ' image':'');
+    el.style.left = node.x+'px';
+    el.style.top = node.y+'px';
+    el.style.setProperty('--rot', (node.rot||0)+'deg');
+    el.dataset.id = node.id;
+
+    const pin = document.createElement('div');
+    pin.className='pin';
+    pin.style.background = pinColors[node.pin]||pinColors['pin-3'];
+    el.appendChild(pin);
+
+    const close = document.createElement('div');
+    close.className='close';
+    close.textContent='✕';
+    close.onclick=(e)=>{e.stopPropagation();removeNode(node.id);};
+    el.appendChild(close);
+
+    if(node.type==='note'){
+      const ta = document.createElement('textarea');
+      ta.value = node.text||'';
+      ta.oninput = ()=>{node.text=ta.value;markUnsaved();};
+      el.appendChild(ta);
+    } else {
+      const thumb = document.createElement('div');
+      thumb.className='thumb';
+      if(node.previewUrl){
+        const img = document.createElement('img');
+        img.src = node.previewUrl;
+        thumb.appendChild(img);
+      } else if(node.driveFileId && accessToken && accessToken!=='DEMO'){
+        thumb.textContent = 'cargando desde Drive…';
+        fetchDriveThumb(node);
+      } else {
+        thumb.textContent = '📎 click para subir imagen';
+        thumb.style.cursor = 'pointer';
+        thumb.onclick = (e)=>{ e.stopPropagation(); openImagePicker(node.id); };
+      }
+      el.appendChild(thumb);
+      const fn = document.createElement('div');
+      fn.className='filename';
+      fn.textContent = node.filename || '(sin archivo enlazado)';
+      el.appendChild(fn);
+    }
+
+    el.addEventListener('mousedown', (e)=>startDrag(e, node, el));
+    el.addEventListener('click', (e)=>{
+      if(e.shiftKey){ handleConnectClick(node.id); e.stopPropagation(); }
+    });
+
+    canvas.appendChild(el);
+  });
+  drawThreads();
+}
+
+function drawThreads(){
+  threadsSvg.innerHTML = '';
+  board.connections.forEach(c=>{
+    const a = board.nodes.find(n=>n.id===c.from);
+    const b = board.nodes.find(n=>n.id===c.to);
+    if(!a||!b) return;
+    const x1=a.x+ (a.w||220)/2, y1=a.y+20;
+    const x2=b.x+ (b.w||220)/2, y2=b.y+20;
+    const midY = (y1+y2)/2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', 'var(--thread)');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-dasharray', '1 7');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('opacity', '0.85');
+    threadsSvg.appendChild(path);
+  });
+}
+
+/* ---------- Interacción: arrastrar tarjetas ---------- */
+let dragTarget=null, dragOffset={x:0,y:0};
+function startDrag(e, node, el){
+  e.preventDefault();
+  dragTarget = {node, el};
+  const rect = canvas.getBoundingClientRect();
+  dragOffset.x = (e.clientX - rect.left)/scale - node.x;
+  dragOffset.y = (e.clientY - rect.top)/scale - node.y;
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+window.addEventListener('mousemove', (e)=>{
+  if(dragTarget){
+    const rect = canvas.getBoundingClientRect();
+    dragTarget.node.x = (e.clientX - rect.left)/scale - dragOffset.x;
+    dragTarget.node.y = (e.clientY - rect.top)/scale - dragOffset.y;
+    dragTarget.el.style.left = dragTarget.node.x+'px';
+    dragTarget.el.style.top = dragTarget.node.y+'px';
+    drawThreads();
+    markUnsaved();
+  }
+});
+window.addEventListener('mouseup', ()=>{ dragTarget=null; });
+
+/* Conectar dos notas: shift+click en una, luego shift+click en otra */
+function handleConnectClick(id){
+  if(!selectedForConnect){
+    selectedForConnect = id;
+    updateStatus('Selecciona la segunda tarjeta (shift+click) para conectar…');
+  } else if(selectedForConnect !== id){
+    board.connections.push({from:selectedForConnect, to:id});
+    selectedForConnect = null;
+    updateStatus('Conectado ✓');
+    render();
+    markUnsaved();
+  }
+}
+
+/* ---------- Pan y zoom del lienzo ---------- */
+let scale = 1, panX=0, panY=0;
+const wrap = document.getElementById('canvas-wrap');
+let isPanning=false, panStart={x:0,y:0};
+wrap.addEventListener('mousedown',(e)=>{
+  if(e.target===wrap || e.target===canvas || e.target===threadsSvg){
+    isPanning=true; wrap.classList.add('grabbing');
+    panStart={x:e.clientX-panX, y:e.clientY-panY};
+  }
+});
+window.addEventListener('mousemove',(e)=>{
+  if(isPanning){ panX=e.clientX-panStart.x; panY=e.clientY-panStart.y; applyTransform(); }
+});
+window.addEventListener('mouseup',()=>{ isPanning=false; wrap.classList.remove('grabbing'); });
+wrap.addEventListener('wheel',(e)=>{
+  e.preventDefault();
+  zoomBy(e.deltaY<0?0.06:-0.06);
+},{passive:false});
+
+function applyTransform(){
+  canvas.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+}
+function zoomBy(d){ scale=Math.min(2,Math.max(0.35,scale+d)); applyTransform(); }
+function resetView(){ scale=1; panX=0; panY=0; applyTransform(); }
+
+/* ---------- Nodos ---------- */
+function addCard(type){
+  const id = 'n'+(idCounter++);
+  const base = {id, type, x: 400 - panX/scale + Math.random()*80, y: 300 - panY/scale + Math.random()*80,
+    rot:(Math.random()*6-3).toFixed(1), pin: ['pin-1','pin-2','pin-3','pin-4'][Math.floor(Math.random()*4)], w:220};
+  if(type==='note') base.text='';
+  if(type==='image'){ base.filename=null; base.driveFileId=null; }
+  board.nodes.push(base);
+  render();
+  markUnsaved();
+}
+function removeNode(id){
+  board.nodes = board.nodes.filter(n=>n.id!==id);
+  board.connections = board.connections.filter(c=>c.from!==id && c.to!==id);
+  render();
+  markUnsaved();
+}
+
+/* ---------- Exportar/Importar JSON local (funciona ya, sin Drive) ---------- */
+function saveLocalJson(){
+  // previewUrl es una blob: URL válida solo en esta sesión — no se exporta,
+  // solo driveFileId (el enlace real y persistente al archivo en Drive)
+  const exportable = JSON.parse(JSON.stringify(board, (k,v)=> k==='previewUrl' ? undefined : v));
+  const blob = new Blob([JSON.stringify(exportable,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download = `corcho-${board.boardId}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  updateStatus('Exportado ✓ — súbelo a tu carpeta de Drive para abrirlo en otro PC');
+}
+
+/* ---------- Integración con Google Drive (requiere Client ID real) ---------- */
+let gapiInited=false, tokenClient=null, accessToken=null;
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+function toggleDrivePanel(){
+  document.getElementById('drive-panel').classList.toggle('open');
+}
+
+function loadGis(cb){
+  if(window.google && google.accounts){ cb(); return; }
+  const s = document.createElement('script');
+  s.src='https://accounts.google.com/gsi/client';
+  s.onload = cb;
+  document.head.appendChild(s);
+}
+
+function driveSignIn(){
+  const clientId = document.getElementById('clientIdInput').value.trim();
+  if(!clientId){
+    updateStatus('Demo local: sin Client ID, simulando conexión…');
+    accessToken = 'DEMO';
+    updateStatus('Conectado (modo demo, sin red real) ✓');
+    return;
+  }
+  loadGis(()=>{
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: DRIVE_SCOPE,
+      callback: (resp)=>{
+        accessToken = resp.access_token;
+        updateStatus('Conectado a Google Drive ✓');
+      }
+    });
+    tokenClient.requestAccessToken();
+  });
+}
+
+async function driveSaveToDrive(){
+  if(!accessToken){ updateStatus('Primero conéctate a Drive'); return; }
+  if(accessToken==='DEMO'){
+    updateStatus('Modo demo: aquí se llamaría a Drive API con tu token real');
+    return;
+  }
+  const fileName = `corcho-${board.boardId}.json`;
+  const exportable = JSON.parse(JSON.stringify(board, (k,v)=> k==='previewUrl' ? undefined : v));
+  const metadata = { name: fileName, mimeType:'application/json' };
+  const boundary = 'corcho_boundary';
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`+
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(exportable)}\r\n--${boundary}--`;
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method:'POST',
+    headers:{ 'Authorization':`Bearer ${accessToken}`, 'Content-Type':`multipart/related; boundary=${boundary}` },
+    body
+  });
+  if(res.ok){ updateStatus('Guardado en Drive ✓'); } else { updateStatus('Error al guardar en Drive'); }
+}
+
+async function driveLoadFromDrive(fileId, name){
+  if(!accessToken){ updateStatus('Primero conéctate a Drive'); return; }
+  if(accessToken==='DEMO'){
+    updateStatus('Modo demo: aquí se descargaría el .json real desde Drive');
+    return;
+  }
+  const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers:{ 'Authorization':`Bearer ${accessToken}` }
+  });
+  board = await fileRes.json();
+  render();
+  updateStatus(`Tablero "${name}" cargado desde Drive ✓`);
+}
+
+/* Lista todos los archivos corcho-*.json guardados en Drive */
+async function driveListBoards(){
+  const listEl = document.getElementById('board-list');
+  if(!accessToken){ updateStatus('Primero conéctate a Drive'); return; }
+  if(accessToken==='DEMO'){
+    listEl.innerHTML = `
+      <div class="item" onclick="alert('Modo demo — conecta un Client ID real para listar tus tableros')">
+        <span>📋 corcho-proyecto-x.json</span><span>(demo)</span>
+      </div>
+      <div class="item" onclick="alert('Modo demo — conecta un Client ID real para listar tus tableros')">
+        <span>📋 corcho-branding-mb.json</span><span>(demo)</span>
+      </div>`;
+    return;
+  }
+  const q = encodeURIComponent(`name contains 'corcho-' and name contains '.json' and trashed = false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`, {
+    headers:{ 'Authorization':`Bearer ${accessToken}` }
+  });
+  const data = await res.json();
+  if(!data.files || !data.files.length){
+    listEl.innerHTML = `<div class="empty">Aún no hay tableros guardados en tu Drive</div>`;
+    return;
+  }
+  listEl.innerHTML = data.files.map(f=>`
+    <div class="item" onclick="driveLoadFromDrive('${f.id}','${f.name.replace(/'/g,"")}')">
+      <span>📋 ${f.name}</span>
+      <span style="color:#7a715e;font-size:10.5px;">abrir →</span>
+    </div>`).join('');
+}
+
+/* Descarga (autenticada) la imagen ya subida a Drive para mostrarla como miniatura */
+async function fetchDriveThumb(node){
+  try{
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${node.driveFileId}?alt=media`, {
+      headers:{ 'Authorization':`Bearer ${accessToken}` }
+    });
+    if(!res.ok) return;
+    const blob = await res.blob();
+    node.previewUrl = URL.createObjectURL(blob);
+    render();
+  }catch(e){ /* silencioso: se reintenta en el próximo render si hace falta */ }
+}
+
+/* ---------- Subida real de imágenes a Drive ---------- */
+let pendingImageNodeId = null;
+const imgInput = document.getElementById('imgFileInput');
+function openImagePicker(nodeId){
+  pendingImageNodeId = nodeId;
+  imgInput.click();
+}
+imgInput.addEventListener('change', async ()=>{
+  const file = imgInput.files[0];
+  if(!file || !pendingImageNodeId) return;
+  const node = board.nodes.find(n=>n.id===pendingImageNodeId);
+  if(!node) return;
+
+  // Vista previa inmediata en el lienzo (siempre funciona, con o sin Drive)
+  const localUrl = URL.createObjectURL(file);
+  node.previewUrl = localUrl;
+  node.filename = file.name;
+  render();
+  markUnsaved();
+
+  if(!accessToken || accessToken==='DEMO'){
+    updateStatus('Imagen añadida localmente (conéctate a Drive para subirla de verdad)');
+    imgInput.value = '';
+    return;
+  }
+
+  updateStatus('Subiendo imagen a Drive…');
+  const metadata = { name: `${board.boardId}-${node.id}-${file.name}`, mimeType: file.type };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], {type:'application/json'}));
+  form.append('file', file);
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method:'POST',
+    headers:{ 'Authorization':`Bearer ${accessToken}` },
+    body: form
+  });
+  if(res.ok){
+    const uploaded = await res.json();
+    node.driveFileId = uploaded.id;
+    updateStatus('Imagen subida a Drive ✓ — enlazada al nodo');
+    markUnsaved();
+  } else {
+    updateStatus('Error al subir la imagen a Drive');
+  }
+  imgInput.value = '';
+});
+
+/* ---------- Utilidades ---------- */
+function updateStatus(msg){
+  document.getElementById('status').textContent = msg;
+}
+function markUnsaved(){
+  document.getElementById('boardNameLabel').textContent = `— ${board.boardId} (cambios sin guardar)`;
+}
+
+/* ---------- Import JSON drag&drop sobre el lienzo (probar sin Drive) ---------- */
+wrap.addEventListener('dragover', e=>e.preventDefault());
+wrap.addEventListener('drop', e=>{
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if(file && file.name.endsWith('.json')){
+    const reader = new FileReader();
+    reader.onload = ()=>{ board = JSON.parse(reader.result); render(); updateStatus('Tablero importado ✓'); };
+    reader.readAsText(file);
+  }
+});
+
+render();
+</script>
+</body>
+</html>
